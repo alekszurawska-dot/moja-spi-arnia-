@@ -1,0 +1,132 @@
+# Przykładowa baza przepisów (każdy przepis ma składniki w gramach/sztukach na 1 porcję oraz kalorie)
+recipes = [
+    {
+        "name": "Fit placuszki twarogowe z wanilią",
+        "category": "Śniadanie / Szybkie",
+        "ingredients": {"twaróg": 150, "jajka": 1, "mąka": 30, "skyr": 50},
+        "base_portions": 1,
+        "calories_per_portion": 320,
+        "protein": 32,
+        "prep": "Wszystkie składniki zblenduj lub wymieszaj widelcem na gładką masę. Smaż na rozgrzanej patelni bez tłuszczu z obu stron na złoty kolor."
+    },
+    {
+        "name": "Wysokobiałkowy omlet ze szpinakiem",
+        "category": "Śniadanie / Wytrawne",
+        "ingredients": {"jajka": 2, "szpinak": 50, "twaróg": 50},
+        "base_portions": 1,
+        "calories_per_portion": 280,
+        "protein": 24,
+        "prep": "Jajka roztrzep widelcem. Dodaj pokruszony twaróg i liście szpinaku. Wylej na rozgrzaną patelnię i smaż pod przykryciem przez ok. 5 minut."
+    },
+    {
+        "name": "Szybki serek deserowy z owocami",
+        "category": "Przekąska",
+        "ingredients": {"skyr": 150, "owoc": 100},
+        "base_portions": 1,
+        "calories_per_portion": 180,
+        "protein": 18,
+        "prep": "Przełóż skyr do miseczki, wymieszaj z ulubionymi owocami."
+    }
+]
+
+# Stan sesji do zapisywania ulubionych przepisów
+if 'favorites' not in st.session_state:
+    st.session_state.favorites = []
+
+st.title("🍳 Inteligentna Spiżarnia i Kalorie")
+st.write("Wpisz lub zaznacz składniki, które masz w domu, a aplikacja podpowie, co pysznego możesz z nich ugotować!")
+
+# --- SEKCJA 1: WPROWADZANIE SKŁADNIKÓW ---
+st.subheader("1. Co masz w lodówce?")
+
+# Popularne składniki do szybkiego zaznaczenia
+common_items = ["twaróg", "jajka", "skyr", "szpinak", "mąka", "owoc"]
+selected_common = []
+
+st.write("Zaznacz posiadane produkty:")
+cols = st.columns(3)
+for i, item in enumerate(common_items):
+    with cols[i % 3]:
+        if st.checkbox(item.capitalize(), key=f"cb_{item}"):
+            selected_common.append(item)
+
+# Pole tekstowe na dodatkowe składniki
+extra_input = st.text_input("Lub wpisz inne składniki po przecinku:", placeholder="np. kurczak, ryż, pomidor")
+extra_items = [item.strip().lower() for item in extra_input.split(",")] if extra_input else []
+
+# Połączenie wszystkich dostępnych składników użytkownika
+user_ingredients = set(selected_common + extra_items)
+user_ingredients = {item for item in user_ingredients if item != ""}
+
+if user_ingredients:
+    st.info(dict(f"Twoje składniki: {', '.join(user_ingredients)}"))
+
+# --- SEKCJA 2: DOPASOWYWANIE PRZEPISÓW ---
+st.subheader("2. Co możesz ugotować?")
+
+if not user_ingredients:
+    st.warning("Zaznacz lub wpisz przynajmniej jeden składnik powyżej, aby zobaczyć propozycje przepisów!")
+else:
+    full_matches = []
+    partial_matches = []
+
+    for recipe in recipes:
+        recipe_ingredients = set(recipe["ingredients"].keys())
+        # Sprawdzamy, jakich składników brakuje
+        missing = recipe_ingredients - user_ingredients
+        
+        if len(missing) == 0:
+            full_matches.append(recipe)
+        elif len(missing) <= 1: # Prawie gotowe (brakuje 1 składnika)
+            partial_matches.append((recipe, missing))
+
+    # Wyświetlanie pełnych trafień
+    st.markdown("### 🎯 Pełne trafienia (masz wszystko)")
+    if not full_matches:
+        st.write("Brak dań w 100% pasujących do Twoich składników. Sprawdź poniższe propozycje lub dodaj coś do spiżarni!")
+    else:
+        for recipe in full_matches:
+            with st.expander(f"✨ {recipe['name']} (~{recipe['calories_per_portion']} kcal na porcję)"):
+                st.write(**Kategoria:** {recipe['category']})
+                
+                # Przelicznik porcji
+                portions = st.slider("Liczba porcji:", 1, 4, recipe['base_portions'], key=f"full_{recipe['name']}")
+                
+                total_cal = recipe['calories_per_portion'] * portions
+                total_protein = recipe['protein'] * portions
+                
+                st.markdown(f"**Wartości odżywcze dla {portions} porcji:** 🔥 {total_cal} kcal | 💪 Białko: {total_protein}g")
+                
+                st.markdown("**Składniki:**")
+                for ing, amount in recipe['ingredients'].items():
+                    st.write(f"- {ing}: {amount * portions}g/szt.")
+                    
+                st.markdown("**Sposób przygotowania:**")
+                st.write(recipe['prep'])
+                
+                # Przycisk ulubionych
+                is_fav = recipe['name'] in st.session_state.favorites
+                if st.button("❤️ Usuń z ulubionych" if is_fav else "🤍 Dodaj do ulubionych", key=f"fav_{recipe['name']}"):
+                    if is_fav:
+                        st.session_state.favorites.remove(recipe['name'])
+                    else:
+                        st.session_state.favorites.append(recipe['name'])
+                    st.rerun()
+
+    # Wyświetlanie częściowych trafień
+    if partial_matches:
+        st.markdown("### 🛒 Prawie gotowe (brakuje 1 składnika)")
+        for recipe, missing in partial_matches:
+            missing_str = ", ".join(missing)
+            with st.expander(f"⚠️ {recipe['name']} (Brakuje: {missing_str})"):
+                portions = st.slider("Liczba porcji:", 1, 4, recipe['base_portions'], key=f"part_{recipe['name']}")
+                st.write(f"**Kalorie na porcję:** {recipe['calories_per_portion']} kcal | Białko: {recipe['protein']}g")
+                st.markdown("**Przepis:**")
+                st.write(recipe['prep'])
+
+# --- SEKCJA 3: ULUBIONE PRZEPISY ---
+if st.session_state.favorites:
+    st.markdown("---")
+    st.subheader("⭐ Twoje ulubione przepisy")
+    for fav in st.session_state.favorites:
+        st.write(f"• {fav}")
